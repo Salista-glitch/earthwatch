@@ -105,7 +105,9 @@ async function refreshData() {
   // The browser reads the pipeline's output, never the database or a secret.
   // Validate the entire snapshot BEFORE replacing the previous working state.
   try {
-    const snapshot = Data.readSnapshot(await fetchJson('data/observations.json'));
+    const config = Data.readConfig(await fetchJson('config.json'));
+    const snapshot = Data.readSnapshot(await fetchJson(config.url));
+    state.localSnapshot = config.local;
     state.observations = snapshot.observations;
     state.sourceStatus = new Map(snapshot.sources.map(source => [source.name, source]));
     state.lastRetrieval = snapshot.generatedAt;
@@ -136,9 +138,9 @@ function updateSourceStatus() {
     if (status?.message) row.append(makeElement('p', '', status.message + (status.receivedAt ? ' Showing last successful data.' : '')));
     $('source-status-list').append(row);
   }
-  $('refresh-label').textContent = state.lastRetrieval ? 'Snapshot ' + Data.ageLabel(state.lastRetrieval) + ' old' : 'Run python pipeline/refresh.py';
+  $('refresh-label').textContent = state.lastRetrieval ? (state.localSnapshot ? 'Local snapshot ' : 'Snapshot ') + Data.ageLabel(state.lastRetrieval) + ' old' : 'No snapshot loaded';
   $('snapshot-message').hidden = !state.snapshotError;
-  $('snapshot-message').textContent = state.snapshotError ? state.snapshotError + (state.observations.size ? ' Last loaded snapshot retained.' : ' Run the Python pipeline to generate data/observations.json.') : '';
+  $('snapshot-message').textContent = state.snapshotError ? state.snapshotError + (state.observations.size ? ' Last loaded snapshot retained.' : ' No observations available. Check source status.') : '';
 }
 
 function renderFeed(observations) {
@@ -152,7 +154,7 @@ function renderFeed(observations) {
     const empty = makeElement('div', 'empty-state');
     const hasData = state.observations.size > 0;
     empty.append(makeElement('h3', '', hasData ? 'A quieter window' : state.refreshing ? 'Listening to the planet' : 'No observations received'));
-    empty.append(makeElement('p', '', hasData ? 'No matching observations in this time window. Try a wider period, another layer, or global coverage.' : state.refreshing ? 'Reading the pipeline snapshot.' : 'Run python pipeline/refresh.py, then refresh. Source status has more details.'));
+    empty.append(makeElement('p', '', hasData ? 'No matching observations in this time window. Try a wider period, another layer, or global coverage.' : state.refreshing ? 'Reading the pipeline snapshot.' : 'The data snapshot is unavailable. Source status has more details.'));
     if (hasData && (state.scope === 'area' || state.hours < 168 || state.cutoff < 1000 || $('search').value)) {
       const button = makeElement('button', '', 'Explore global · 7 days ↗');
       button.addEventListener('click', () => {

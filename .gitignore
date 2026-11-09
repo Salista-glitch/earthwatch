@@ -12,3 +12,6 @@ node_modules/
 /.private/
 /.openai/
 *.local.md
+
+# Generated observations are published to Blob, not committed to Git.
+/dist/data/observations.json

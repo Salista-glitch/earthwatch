@@ -126,7 +126,19 @@
     return { observations, sources: payload.sources, generatedAt: payload.generatedAt };
   }
 
-  const api = { HOUR, validPoint, safeLink, normalizeQuakes, normalizeEvents, distanceKm, filterObservations, ageLabel, readSnapshot };
+  function readConfig(config) {
+    if (typeof config?.snapshotUrl !== 'string') throw new Error('Invalid snapshot configuration.');
+    if (config.snapshotUrl === '') return { url: 'data/observations.json', local: true };
+    const url = new URL(config.snapshotUrl);
+    if (url.protocol !== 'https:' || !/^[a-z0-9-]+\.public\.blob\.vercel-storage\.com$/.test(url.hostname)
+      || url.username || url.password || url.port || url.search || url.hash
+      || url.pathname !== '/earthwatch/observations.json') {
+      throw new Error('Configure the public EarthWatch Blob URL.');
+    }
+    return { url: url.href, local: false };
+  }
+
+  const api = { HOUR, validPoint, safeLink, normalizeQuakes, normalizeEvents, distanceKm, filterObservations, ageLabel, readSnapshot, readConfig };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.EarthWatchData = api;
 })(typeof window !== 'undefined' ? window : globalThis);

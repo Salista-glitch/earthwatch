@@ -6,6 +6,20 @@ const sandbox = { URL, module: { exports: {} } };
 vm.runInNewContext(fs.readFileSync('dist/data.js', 'utf8'), sandbox);
 const data = sandbox.module.exports;
 
+test('empty configuration uses the explicitly labelled local snapshot', () => {
+  assert.equal(data.readConfig({ snapshotUrl: '' }).local, true);
+  assert.equal(data.readConfig({ snapshotUrl: '' }).url, 'data/observations.json');
+});
+
+test('configuration accepts only the public snapshot URL, without credentials', () => {
+  const valid = 'https://example.public.blob.vercel-storage.com/earthwatch/observations.json';
+  assert.equal(data.readConfig({ snapshotUrl: valid }).url, valid);
+  for (const snapshotUrl of [valid.replace('https:', 'http:'), valid + '?token=secret', valid.replace('example.', 'example.evil.'), 'https://user:password@example.public.blob.vercel-storage.com/earthwatch/observations.json', 'https://example.com/data.json']) {
+    assert.throws(() => data.readConfig({ snapshotUrl }));
+  }
+  assert.throws(() => data.readConfig({}));
+});
+
 test('reject invalid or missing coordinates rather than drawing them at zero', () => {
   const payload = { features: [
     { id: 'missing', geometry: { coordinates: [null, null] }, properties: { time: 1 } },

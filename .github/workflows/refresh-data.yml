@@ -7,7 +7,7 @@ on:
     - cron: '17 * * * *'
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 concurrency:
@@ -16,26 +16,40 @@ concurrency:
 
 jobs:
   refresh:
-    # Deploy only the default branch; no pull-request code receives secrets.
-    if: github.ref_name == github.event.repository.default_branch
+    # Manual setup first; enable the repository variable after verifying publication.
+    if: github.ref_name == github.event.repository.default_branch && (github.event_name == 'workflow_dispatch' || vars.EARTHWATCH_SCHEDULE_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install the publisher dependency
+        run: npm ci --ignore-scripts
+
+      - name: Check storage configuration
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: |
+          if [ -z "$BLOB_READ_WRITE_TOKEN" ]; then
+            echo "::error::Add the BLOB_READ_WRITE_TOKEN repository Actions secret before running."
+            exit 1
+          fi
+
       - name: Test data rules before fetching anything
         run: |
           python -m unittest discover -s tests -p 'test_*.py'
-          node --test tests/data.test.cjs
+          npm test
 
       - name: Restore the last pipeline database and raw responses
         shell: bash
@@ -54,11 +68,11 @@ jobs:
         # A failed source is retained in the snapshot's status, not hidden.
         # Publish that status, preserve the database, then fail the job at the end.
         continue-on-error: true
-        run: python pipeline/refresh.py
+        run: python pipeline/refresh.py --output work/observations.json
 
       - name: Preserve pipeline state for the next run
         id: state
-        if: always()
+        if: always() && (steps.batch.outcome == 'success' || steps.batch.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: earthwatch-state
@@ -76,30 +90,10 @@ jobs:
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
           done
 
-      - name: Commit only the public snapshot
-        shell: bash
-        run: |
-          test -s dist/data/observations.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- dist/data/observations.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Refresh EarthWatch observations"
-            git pull --rebase origin "$BRANCH"
-            git push origin "HEAD:$BRANCH"
-          fi
-
-      - name: Ask Vercel to publish the updated default branch
+      - name: Replace the public data snapshot
         env:
-          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
-        shell: bash
-        run: |
-          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
-            echo "::warning::Snapshot saved to GitHub. Add VERCEL_DEPLOY_HOOK to publish scheduled updates reliably."
-          else
-            curl --fail --silent --show-error --request POST "$VERCEL_DEPLOY_HOOK" --output /dev/null
-            echo "Vercel deployment requested. Check Vercel for its final Ready status."
-          fi
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: node pipeline/publish.mjs work/observations.json
 
       - name: Report a source failure
         if: steps.batch.outcome == 'failure'

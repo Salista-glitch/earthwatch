@@ -1,0 +1,8 @@
+{
+  "name": "earthwatch-publisher",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "node --test tests/*.test.cjs tests/*.test.mjs" },
+  "dependencies": { "@vercel/blob": "2.9.0" },
+  "engines": { "node": ">=22" }
+}

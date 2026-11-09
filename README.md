@@ -13,14 +13,14 @@ EarthWatch combines an interactive 3D globe with a scheduled observation pipelin
 
 ## Run locally
 
-Requirements: Python 3.12+, internet access, and a WebGL-capable browser. Node.js is required only for JavaScript tests. No pip dependencies or frontend build step are needed.
+Requirements: Python 3.12+, internet access, and a WebGL-capable browser. Node.js 22+ is required for tests and Blob publication. No pip dependencies or frontend build step are needed.
 
 ```sh
 python pipeline/refresh.py
 python -m http.server 8173 --bind 127.0.0.1 --directory dist
 ```
 
-Open http://127.0.0.1:8173/. On Windows, `START-EARTHWATCH.cmd` starts the local server. The bundled snapshot contains actual observations from its recorded collection date; run the refresh command to update it.
+Open http://127.0.0.1:8173/. On Windows, `START-EARTHWATCH.cmd` starts the local server. Generate a local snapshot with the refresh command. Leave `dist/config.json` with an empty `snapshotUrl` for local data; hosted deployments use the public Blob URL instead.
 
 ## Architecture
 
@@ -51,7 +51,8 @@ Basemap imagery and scenic lighting are not live. Marker glows are decorative. R
 
 ```sh
 python -m unittest discover -s tests -p "test_*.py"
-node --test tests/data.test.cjs
+npm ci --ignore-scripts
+npm test
 python pipeline/verify_replay.py
 ```
 
@@ -59,11 +60,9 @@ The replay utility requires a successful USGS ingestion. It replays a saved resp
 
 ## Deployment and retention
 
-Vercel serves `dist/`. The included GitHub Actions workflow runs the Python batch, restores SQLite from an Actions artifact, exports the public snapshot, commits it, and requests deployment through a Vercel hook. The browser checks the snapshot every five minutes while open. Deployment requests and successful deployments are separate states; see [DEPLOY.md](DEPLOY.md).
+Vercel serves the static app in `dist/`. GitHub Actions runs the Python batch hourly, restoring SQLite from an Actions artifact. A small Node publisher replaces one public JSON object in Vercel Blob. The browser reads its URL from `dist/config.json` and checks for updates every five minutes while open. Data refreshes do not commit files or trigger website deployments. See [DEPLOY.md](DEPLOY.md) for setup.
 
-The current workflow packages each data refresh into a deployment. Deployment frequency, Git history growth, and deployment storage should be reviewed before enabling the hourly schedule. Publishing data to separate object storage is not implemented in this version.
-
-Raw responses and revisions are retained for seven days, run logs for fourteen days. Only the two newest state artifacts are retained, each with a seven-day expiry. If no unexpired artifact is available, the database starts fresh. This retention model is not a permanent scientific archive. Local database/raw files are ignored by Git; `dist/data/observations.json` is public and tracked. Watch areas remain in each visitor's browser storage.
+Raw responses and revisions are retained for seven days, run logs for fourteen days. Only the two newest state artifacts are retained, each with a seven-day expiry. If no unexpired artifact is available, the database starts fresh. This retention model is not a permanent scientific archive. Generated snapshots, database/raw files and credentials are ignored by Git. Watch areas remain in each visitor's browser storage.
 
 ## Attribution
 

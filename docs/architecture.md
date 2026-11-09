@@ -12,7 +12,11 @@ A USGS observation uses the source event identifier. FIRMS detections use a dete
 
 ## Serving
 
-`pipeline/refresh.py` runs sources independently and atomically replaces `dist/data/observations.json`. The snapshot contains normalized observations and per-source retrieval status. A source failure preserves its last successful records and produces explicit failure metadata. The frontend validates the snapshot before replacing its last working state.
+`pipeline/refresh.py` runs sources independently and atomically replaces `dist/data/observations.json`. The snapshot contains normalized observations and per-source retrieval status. A source failure preserves its last successful records and produces explicit failure metadata. In hosted runs the export is written to `work/observations.json`. `pipeline/publish.mjs` validates it again and overwrites `earthwatch/observations.json` in a public Vercel Blob store. The URL stays the same across refreshes. The write token exists only in the publication step's environment.
+
+The frontend reads `dist/config.json`, then fetches the public URL and validates the snapshot before replacing its last working state. An empty URL selects the local generated file and labels it local. A configured remote URL never silently falls back to the local file. A failed fetch retains the browser's last loaded observations and shows an error. Blob caching is configured for 60 seconds; the visible browser polls every five minutes.
+
+The static website deploys when its code or configuration changes. Hourly data updates do not create deployments. SQLite and raw responses live in bounded GitHub Actions artifacts, while Blob contains only the latest public export.
 
 `dist/data.js` implements filtering, distance and age calculations. `dist/app.js` manages rendering, watch areas and interaction. Cesium handles geographic projection, camera navigation and screen-space clustering. Cluster counts refer to plotted observations, not physical fire incidents.
 
