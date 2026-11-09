@@ -1,0 +1,14 @@
+work/
+/data/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+node_modules/
+.vercel/
+*.zip
+
+/.private/
+/.openai/
+*.local.md

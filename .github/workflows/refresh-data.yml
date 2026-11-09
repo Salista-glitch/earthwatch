@@ -1,0 +1,108 @@
+name: Refresh EarthWatch data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Minute 17 of each hour (UTC). Avoid the busy start of the hour.
+    - cron: '17 * * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: earthwatch-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Deploy only the default branch; no pull-request code receives secrets.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test data rules before fetching anything
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py'
+          node --test tests/data.test.cjs
+
+      - name: Restore the last pipeline database and raw responses
+        shell: bash
+        run: |
+          mkdir -p data work
+          artifact_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=earthwatch-state&per_page=1" --jq '.artifacts[] | select(.expired == false) | .id')
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > work/state.zip
+            python -m zipfile -e work/state.zip data
+          else
+            echo "First run, or saved state expired. Starting a fresh database."
+          fi
+
+      - name: Fetch, validate, store and export
+        id: batch
+        # A failed source is retained in the snapshot's status, not hidden.
+        # Publish that status, preserve the database, then fail the job at the end.
+        continue-on-error: true
+        run: python pipeline/refresh.py
+
+      - name: Preserve pipeline state for the next run
+        id: state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: earthwatch-state
+          path: data/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Keep only the two newest state artifacts
+        if: always() && steps.state.outputs.artifact-id != ''
+        continue-on-error: true
+        shell: bash
+        run: |
+          old_ids=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=earthwatch-state&per_page=100" --paginate --slurp --jq '[.[].artifacts[]] | sort_by(.created_at) | reverse | .[2:][].id')
+          for artifact_id in $old_ids; do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done
+
+      - name: Commit only the public snapshot
+        shell: bash
+        run: |
+          test -s dist/data/observations.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- dist/data/observations.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh EarthWatch observations"
+            git pull --rebase origin "$BRANCH"
+            git push origin "HEAD:$BRANCH"
+          fi
+
+      - name: Ask Vercel to publish the updated default branch
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "::warning::Snapshot saved to GitHub. Add VERCEL_DEPLOY_HOOK to publish scheduled updates reliably."
+          else
+            curl --fail --silent --show-error --request POST "$VERCEL_DEPLOY_HOOK" --output /dev/null
+            echo "Vercel deployment requested. Check Vercel for its final Ready status."
+          fi
+
+      - name: Report a source failure
+        if: steps.batch.outcome == 'failure'
+        run: |
+          echo "::error::One or more sources failed. Read the batch log and app source status. Last successful source records were retained."
+          exit 1

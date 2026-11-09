@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070c12">
+  <meta name="description" content="Explore Earth from orbit. Follow real natural-event observations, inspect their sources, and watch the places that matter to you.">
+  <title>EarthWatch · Orbital observatory</title>
+  <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.130/Build/Cesium/Widgets/widgets.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="globe" aria-label="Interactive three dimensional Earth"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="EarthWatch home"><span class="orbit-logo"></span><span>EARTH<span class="brand-light">WATCH</span></span><span class="edition">ORBITAL OBSERVATORY</span></a>
+    <button id="region-button" class="region-button" title="Return to southern Africa"><span class="crosshair">⌖</span> SOUTHERN AFRICA <span class="chevron">↙</span></button>
+    <div class="top-actions"><span id="utc-clock" class="mono"></span><button id="status-button" class="status-button"><span id="status-dot" class="status-dot loading"></span><span id="status-label">CONNECTING</span><span class="chevron">⌄</span></button></div>
+  </header>
+
+  <main>
+    <aside class="left-rail panel" aria-label="Observation controls">
+      <div class="rail-section"><div class="section-heading"><h2>WATCH AREAS</h2><button id="add-watch" class="icon-button" aria-label="Save a watch area" title="Save a watch area">+</button></div><div id="watch-list"></div></div>
+      <div class="rail-section"><div class="section-heading"><h2>OBSERVATION LAYERS</h2></div>
+        <label class="layer"><span class="layer-symbol quake">⌁</span><span>Earthquakes<small>USGS · past 7 days</small></span><input id="layer-quakes" type="checkbox" checked><span class="switch"></span></label>
+        <label class="layer"><span class="layer-symbol event">✳</span><span>Natural events<small>NASA EONET · past 30 days</small></span><input id="layer-events" type="checkbox" checked><span class="switch"></span></label>
+        <label class="layer"><span class="layer-symbol boundary">▧</span><span>Watch boundaries</span><input id="layer-boundaries" type="checkbox" checked><span class="switch"></span></label>
+        <label class="layer"><span class="layer-symbol fire">⠿</span><span>Satellite hotspots<small>NASA FIRMS · southern Africa</small></span><input id="layer-fires" type="checkbox" checked><span class="switch"></span></label>
+        <p class="help">Numbered halos group nearby observations. Click a group to zoom in. Pulses are decorative, not severity.</p>
+      </div>
+      <div class="rail-section scope-section"><div class="section-heading"><h2>FEED COVERAGE</h2></div><div class="segmented"><button id="scope-global" class="active">Global</button><button id="scope-area">Watch area</button></div><p class="help">The camera and feed are independent. Choose a watch area to filter nearby observations.</p></div>
+      <div class="rail-footer"><span class="tiny-cross">+</span><div>Observe. Understand.<br><span>Stay connected to Earth.</span></div></div>
+    </aside>
+
+    <div class="view-caption" aria-hidden="true"><span class="eyebrow">ORBITAL OBSERVATION / 01</span><h1>Southern Africa</h1><p id="view-label">Explore a planet in motion</p></div>
+    <div id="map-count" class="map-count"></div><div class="globe-toolbar" aria-label="Globe navigation"><button id="zoom-in" class="icon-button" aria-label="Zoom in">+</button><button id="zoom-out" class="icon-button" aria-label="Zoom out">−</button><span></span><button id="reset-view" class="icon-button" aria-label="Reset globe orientation" title="Reset globe orientation">⌖</button><button id="fullscreen" class="icon-button" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button></div>
+    <div id="globe-loading" class="globe-loading"><span class="spinner"></span> ESTABLISHING ORBIT</div>
+    <div id="globe-error" class="globe-error" hidden><h2>Globe could not start</h2><p>The 3D view needs WebGL and access to Cesium’s content server. Observation details are still available in the feed.</p></div>
+
+    <aside class="right-rail panel" aria-label="Observation feed">
+      <div class="feed-header"><div><span class="eyebrow">GROUND SIGNALS</span><h2>Observation feed <span id="feed-count">—</span></h2></div><button id="refresh" class="icon-button" aria-label="Refresh observations" title="Refresh observations">↻</button></div>
+      <div class="feed-tools"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find a place or event" aria-label="Search observations"></label><div class="feed-meta"><span id="coverage-label">GLOBAL COVERAGE</span><span id="feed-window">LAST 24 HOURS</span></div></div>
+      <div id="feed-list" class="feed-list" aria-live="polite"><div class="empty-state"><span class="spinner"></span><h3>Listening to the planet</h3><p>Connecting to USGS and NASA EONET.</p></div></div>
+      <p id="snapshot-message" class="snapshot-message" hidden></p><div class="feed-footer"><span id="refresh-label">Reading pipeline snapshot</span><span class="auto-label">↻ 5 MIN</span></div>
+    </aside>
+
+    <section id="detail" class="detail-panel panel" aria-label="Selected observation" hidden><button id="close-detail" class="close-button" aria-label="Close observation">×</button><span id="detail-type" class="eyebrow"></span><h2 id="detail-title"></h2><div id="detail-metrics" class="detail-metrics"></div><dl id="detail-fields"></dl><a id="detail-link" class="source-link" target="_blank" rel="noopener noreferrer">Open original source ↗</a></section>
+
+    <section class="timeline panel" aria-label="Observation timeline"><button id="play" class="play-button" aria-label="Play observation timeline">▶</button><div class="timeline-controls"><label class="sr-only" for="window-select">Time window</label><select id="window-select"><option value="24">24 HOURS</option><option value="72">72 HOURS</option><option value="168">7 DAYS</option></select><span id="timeline-mode">OBSERVATION REPLAY</span></div><div class="timeline-track"><div class="timeline-top"><span id="timeline-start"></span><span id="timeline-current">NOW</span></div><input id="timeline-slider" type="range" min="0" max="1000" value="1000" aria-label="Replay cutoff"><div class="timeline-ticks" aria-hidden="true"><span id="tick-start"></span><span id="tick-mid"></span><span id="tick-end"></span></div></div><button id="go-now" class="now-button active">NOW <span></span></button></section>
+  </main>
+
+  <footer class="bottom-bar"><span>EARTHWATCH <span class="version">/ 01</span></span><span id="coordinates">26.20° S &nbsp; 28.05° E</span><button id="about-button">DATA & ATTRIBUTION ↗</button></footer>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <dialog id="status-dialog"><form method="dialog"><button class="close-button" aria-label="Close source status">×</button></form><span class="eyebrow">PIPELINE VISIBILITY</span><h2>Source status</h2><p>The Python batch produces a snapshot. After deployment, GitHub Actions runs it hourly; this browser checks for the published result every five minutes. A fresh snapshot does not make older observations new. Retrievals older than three hours are marked delayed.</p><div id="source-status-list"></div><div class="dialog-note">Replay filters by observation time. It does not reconstruct what agencies knew at that time. Raw responses, run logs and record revisions are stored by the Python pipeline.</div></dialog>
+  <dialog id="watch-dialog"><form id="watch-form"><button type="button" id="cancel-watch" class="close-button" aria-label="Cancel watch area">×</button><span class="eyebrow">PLACES THAT MATTER</span><h2>Save a watch area</h2><p>Set a centre and radius. Your watch areas are saved in this browser.</p><label class="field">Name<input id="watch-name" required maxlength="45" placeholder="e.g. Cape Town region"></label><div class="field-row"><label class="field">Latitude<input id="watch-lat" required type="number" min="-90" max="90" step="any" value="-33.92"></label><label class="field">Longitude<input id="watch-lon" required type="number" min="-180" max="180" step="any" value="18.42"></label></div><label class="field">Radius (km)<input id="watch-radius" required type="number" min="10" max="3000" value="300"></label><button class="primary-button" type="submit">Save watch area ↗</button></form></dialog>
+  <dialog id="about-dialog"><form method="dialog"><button class="close-button" aria-label="Close about">×</button></form><span class="eyebrow">THE OBSERVATORY / BATCH PIPELINE</span><h2>Real observations.<br>Visible provenance.</h2><p>Python retrieves and validates public data, preserves original responses and revisions in SQLite, then exports the snapshot displayed here. This is an observation explorer, not an emergency warning service.</p><h3>Earthquakes</h3><p>USGS M2.5+ past-week feed. Magnitude and location can be revised; global detection coverage is uneven.</p><h3>Natural events</h3><p>NASA EONET point observations. Locations are reported event geometry, not measured affected area. Separate source reports are not automatically merged.</p><h3>Satellite thermal detections</h3><p>NASA FIRMS public NOAA-20 VIIRS southern Africa 24-hour CSV. Each point is a satellite thermal detection, not a confirmed wildfire or fire perimeter. Confidence is NASA's detection classification. FRP is fire radiative power in megawatts, not fire size. Acquisition and publication are delayed by satellite coverage and processing.</p><h3>The orbital view</h3><p>CesiumJS renders the globe; Esri World Imagery provides the basemap. Lighting is illustrative and imagery is not live. Halos and pulses are decorative markers. For performance the globe plots up to the newest 1,500 matching observations plus the selected one; the feed lists the newest 100.</p><div class="dialog-links"><a href="https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php" target="_blank" rel="noopener noreferrer">USGS ↗</a><a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noopener noreferrer">NASA EONET ↗</a><a href="https://firms.modaps.eosdis.nasa.gov/active_fire/" target="_blank" rel="noopener noreferrer">NASA FIRMS ↗</a></div></dialog>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.130/Build/Cesium/Cesium.js"></script>
+  <script src="data.js"></script><script src="app.js"></script>
+</body>
+</html>
+
+
